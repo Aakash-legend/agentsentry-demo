@@ -9,8 +9,8 @@ apt-get update -qq
 echo "[prereqs] Installing system packages..."
 apt-get install -y --no-install-recommends \
   python3 python3-pip python3-venv \
-  bpftool \
   linux-headers-$(uname -r) \
+  linux-tools-$(uname -r) linux-tools-common \
   clang llvm libelf-dev libbpf-dev \
   bpfcc-tools python3-bpfcc \
   libcap2-bin \
@@ -19,6 +19,19 @@ apt-get install -y --no-install-recommends \
   iproute2 \
   cgroup-tools \
   sudo
+
+echo "[prereqs] Installing bpftool (kernel-version-specific)..."
+# bpftool is provided by linux-tools-$(uname -r) on Ubuntu/Mint
+# Create a symlink so it's in PATH
+BPFTOOL_BIN=$(find /usr/lib/linux-tools -name bpftool 2>/dev/null | head -1)
+if [[ -n "$BPFTOOL_BIN" ]]; then
+  ln -sf "$BPFTOOL_BIN" /usr/local/bin/bpftool
+  echo "[prereqs] ✓ bpftool linked from $BPFTOOL_BIN"
+else
+  echo "[prereqs] ⚠ bpftool not found via linux-tools, trying snap..."
+  snap install bpftool 2>/dev/null || apt-get install -y bpftool 2>/dev/null || \
+    echo "[prereqs] ⚠ bpftool unavailable – BTF check will use kallsyms fallback"
+fi
 
 echo "[prereqs] Verifying BPF LSM is active..."
 LSM_LIST=$(cat /sys/kernel/security/lsm 2>/dev/null || echo "UNAVAILABLE")
