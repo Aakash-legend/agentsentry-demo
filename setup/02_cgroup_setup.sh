@@ -19,9 +19,11 @@ echo "+pids +memory +cpu" > /sys/fs/cgroup/agentsentry.slice/cgroup.subtree_cont
 echo "268435456" > "$CGROUP_PATH/memory.max" 2>/dev/null || true
 echo "50" > "$CGROUP_PATH/pids.max" 2>/dev/null || true
 
-CGROUP_ID=$(cat "$CGROUP_PATH/cgroup.id" 2>/dev/null || echo "UNKNOWN")
+# In cgroup v2, bpf_get_current_cgroup_id() returns the INODE NUMBER
+# of the cgroup directory — not cgroup.id (which may not exist)
+CGROUP_ID=$(stat -c %i "$CGROUP_PATH" 2>/dev/null || echo "UNKNOWN")
 echo "[cgroup] ✓ Cgroup created: $CGROUP_PATH"
-echo "[cgroup] ✓ Cgroup ID: $CGROUP_ID"
+echo "[cgroup] ✓ Cgroup ID (inode): $CGROUP_ID"
 echo "[cgroup] ✓ BPF programs will filter on cgroup ID: $CGROUP_ID"
 
 # Save the cgroup ID for the gateway loader to use
