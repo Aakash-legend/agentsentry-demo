@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AgentSentry – BPF LSM Demo</title>
+  <meta name="description" content="Live demonstration of BPF LSM kernel-level enforcement against an autonomous attacker agent. AgentSentry Milestone 1." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="16" cy="16" r="14" stroke="url(#grad)" stroke-width="2"/>
+            <path d="M10 12l6-4 6 4v8l-6 4-6-4v-8z" fill="url(#grad2)" opacity="0.8"/>
+            <path d="M16 8v16M10 12l6 4 6-4" stroke="rgba(255,255,255,0.6)" stroke-width="1.5"/>
+            <defs>
+              <linearGradient id="grad" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#6366f1"/>
+                <stop offset="1" stop-color="#06b6d4"/>
+              </linearGradient>
+              <linearGradient id="grad2" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#6366f1" stop-opacity="0.4"/>
+                <stop offset="1" stop-color="#06b6d4" stop-opacity="0.4"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div>
+          <div class="logo-title">AgentSentry</div>
+          <div class="logo-sub">BPF LSM Enforcement Demo · Milestone 1</div>
+        </div>
+      </div>
+      <div class="header-badges">
+        <span class="badge badge-kernel">Kernel 6.14</span>
+        <span class="badge badge-bpf">BPF LSM Active</span>
+        <span class="badge badge-cgroup">cgroup v2</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main layout -->
+  <main class="main">
+    <!-- Left column: Controls + Side-effects -->
+    <aside class="sidebar">
+
+      <!-- Gateway Control Panel -->
+      <section class="panel gateway-panel" id="gateway-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <span class="panel-icon">🛡️</span>
+            Security Gateway
+          </h2>
+          <div class="status-dot" id="gateway-status-dot"></div>
+        </div>
+
+        <div class="gateway-status-row">
+          <div class="gateway-status-label">Status</div>
+          <div class="gateway-status-value" id="gateway-status-text">Checking…</div>
+        </div>
+
+        <div class="gateway-status-row">
+          <div class="gateway-status-label">Mode</div>
+          <div class="gateway-status-value" id="gateway-mode-text">—</div>
+        </div>
+
+        <div class="gateway-status-row">
+          <div class="gateway-status-label">Cgroup ID</div>
+          <div class="gateway-status-value mono" id="gateway-cgroup-id">—</div>
+        </div>
+
+        <div class="button-group">
+          <button class="btn btn-start" id="btn-gateway-start" onclick="gatewayStart()">
+            <span class="btn-icon">▶</span> Start Gateway
+          </button>
+          <button class="btn btn-stop" id="btn-gateway-stop" onclick="gatewayStop()" disabled>
+            <span class="btn-icon">■</span> Stop Gateway
+          </button>
+        </div>
+
+        <div class="enforce-toggle">
+          <label class="toggle-label" for="enforce-toggle">Enforce mode (deny, not just log)</label>
+          <label class="switch">
+            <input type="checkbox" id="enforce-toggle" checked onchange="toggleEnforce(this.checked)" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="gateway-note">
+          <span class="note-icon">⚠️</span>
+          Demo: stop = fail-open. Production uses pinned BPF links (fail-closed).
+        </div>
+      </section>
+
+      <!-- Attack Control -->
+      <section class="panel attack-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <span class="panel-icon">⚔️</span>
+            Attacker Agent
+          </h2>
+          <div class="status-dot" id="attack-status-dot" style="background: #374151"></div>
+        </div>
+
+        <div class="gateway-status-row">
+          <div class="gateway-status-label">Status</div>
+          <div class="gateway-status-value" id="attack-status-text">Idle</div>
+        </div>
+
+        <div class="gateway-status-row">
+          <div class="gateway-status-label">Steps done</div>
+          <div class="gateway-status-value" id="attack-steps-done">0 / 7</div>
+        </div>
+
+        <button class="btn btn-attack" id="btn-run-attack" onclick="runAttack()">
+          <span class="btn-icon">🎯</span> Run Attack
+        </button>
+
+        <button class="btn btn-clear" onclick="clearResults()">
+          <span class="btn-icon">🗑</span> Clear Feed
+        </button>
+      </section>
+
+      <!-- Side-Effect Evidence Panel -->
+      <section class="panel evidence-panel">
+        <div class="panel-header">
+          <h2 class="panel-title">
+            <span class="panel-icon">🔍</span>
+            Real Evidence
+          </h2>
+          <button class="btn-refresh" onclick="refreshEvidence()" title="Refresh">↻</button>
+        </div>
+        <p class="evidence-note">Checks actual filesystem &amp; collector – not log text.</p>
+
+        <div class="evidence-item" id="ev-pwned">
+          <div class="evidence-icon">📄</div>
+          <div class="evidence-info">
+            <div class="evidence-label">/tmp/outside/pwned.txt</div>
+            <div class="evidence-value" id="ev-pwned-val">Checking…</div>
+          </div>
+          <div class="evidence-badge" id="ev-pwned-badge">—</div>
+        </div>
+
+        <div class="evidence-item" id="ev-collector">
+          <div class="evidence-icon">📡</div>
+          <div class="evidence-info">
+            <div class="evidence-label">Collector received data</div>
+            <div class="evidence-value" id="ev-collector-val">Checking…</div>
+          </div>
+          <div class="evidence-badge" id="ev-collector-badge">—</div>
+        </div>
+
+        <div class="evidence-item" id="ev-secrets">
+          <div class="evidence-icon">🔑</div>
+          <div class="evidence-info">
+            <div class="evidence-label">Secrets file readable (test)</div>
+            <div class="evidence-value" id="ev-secrets-val">Checking…</div>
+          </div>
+          <div class="evidence-badge" id="ev-secrets-badge">—</div>
+        </div>
+      </section>
+    </aside>
+
+    <!-- Right column: Terminal feed -->
+    <section class="feed-section">
+      <div class="feed-header">
+        <h2 class="feed-title">
+          <span class="feed-icon">⚡</span>
+          Live Attack Feed
+          <span class="feed-count" id="feed-count">0 events</span>
+        </h2>
+        <div class="feed-legend">
+          <span class="legend-item"><span class="verdict-dot succeeded"></span>Succeeded</span>
+          <span class="legend-item"><span class="verdict-dot blocked"></span>Blocked</span>
+          <span class="legend-item"><span class="verdict-dot bpf"></span>BPF Event</span>
+        </div>
+      </div>
+
+      <div class="terminal-wrapper">
+        <div class="terminal-bar">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+          <span class="terminal-label">attacker@agentsentry ~ </span>
+        </div>
+        <div class="terminal" id="terminal">
+          <div class="terminal-idle">
+            <div class="idle-icon">🖥️</div>
+            <div class="idle-text">Waiting for attack…</div>
+            <div class="idle-sub">Press <strong>Run Attack</strong> to start the demo sequence</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BPF Events sub-feed -->
+      <div class="bpf-feed-header">
+        <h3 class="bpf-feed-title">
+          <span>🔬</span> Kernel BPF Events
+          <span class="feed-count" id="bpf-count">0 events</span>
+        </h3>
+      </div>
+      <div class="bpf-feed" id="bpf-feed">
+        <div class="bpf-idle">Kernel events will appear here when gateway is active…</div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>AgentSentry Milestone 1 · BPF LSM on Linux 6.14 · cgroup v2 · Fake data only</span>
+    <span class="footer-sep">|</span>
+    <span>Attacker: <code>localhost:8001</code></span>
+    <span class="footer-sep">|</span>
+    <span>Gateway: <code>localhost:8002</code></span>
+    <span class="footer-sep">|</span>
+    <span>Collector: <code>localhost:9999</code></span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
